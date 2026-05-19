@@ -1,4 +1,1 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
-
-// view.cpp
+﻿// view.hpp is header-only

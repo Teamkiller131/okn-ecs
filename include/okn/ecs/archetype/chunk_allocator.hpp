@@ -1,9 +1,24 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_CHUNK_ALLOCATOR_HPP
-#define OKN_ECS_CHUNK_ALLOCATOR_HPP
+#include <okn/ecs/archetype/chunk.hpp>
+#include <vector>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_CHUNK_ALLOCATOR_HPP
+class ChunkAllocator {
+public:
+    ChunkAllocator() = default;
+    ~ChunkAllocator();
+
+    ChunkAllocator(const ChunkAllocator&) = delete;
+    auto operator=(const ChunkAllocator&) -> ChunkAllocator& = delete;
+
+    auto allocate(const Archetype& archetype, const std::vector<usize>& component_sizes) -> Chunk*;
+    void deallocate(Chunk* chunk);
+    void reset();
+
+private:
+    Chunk* free_list_ = nullptr;
+};
+
+} // namespace okn::ecs

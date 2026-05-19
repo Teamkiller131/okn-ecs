@@ -1,4 +1,1 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
-
-// sparse_set.cpp
+﻿#include <okn/ecs/sparse/sparse_set.hpp>

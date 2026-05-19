@@ -1,9 +1,31 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_SCHEDULER_HPP
-#define OKN_ECS_SCHEDULER_HPP
+#include <okn/ecs/ecs_types.hpp>
+#include <okn/ecs/scheduler/system.hpp>
+#include <vector>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_SCHEDULER_HPP
+class SystemGraph;
+class World;
+
+class Scheduler {
+public:
+    explicit Scheduler(SystemGraph& graph);
+
+    void run(World& world, float delta_time);
+
+    void set_job_system(class IJobSystem* job_system);
+
+    void invalidate_order();
+
+private:
+    SystemGraph* graph_;
+    std::vector<System*> execution_order_;
+    bool order_dirty_ = true;
+    IJobSystem* job_system_ = nullptr;
+
+    void rebuild_order();
+};
+
+} // namespace okn::ecs

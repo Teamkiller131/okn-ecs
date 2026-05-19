@@ -1,9 +1,22 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_QUERY_HPP
-#define OKN_ECS_QUERY_HPP
+#include <okn/ecs/ecs_types.hpp>
+#include <okn/ecs/query/filter.hpp>
+#include <vector>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_QUERY_HPP
+class World;
+
+class Query {
+public:
+    Query(const World& world, const Filter& filter);
+
+    auto entities() const -> const std::vector<Entity>&;
+    auto entity_count() const -> usize;
+
+private:
+    std::vector<Entity> matched_;
+};
+
+} // namespace okn::ecs

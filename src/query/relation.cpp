@@ -1,4 +1,1 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
-
-// relation.cpp
+﻿// relation.hpp is header-only

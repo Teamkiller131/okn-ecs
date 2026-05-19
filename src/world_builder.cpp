@@ -1,4 +1,9 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#include <okn/ecs/world_builder.hpp>
 
-// world_builder.cpp
+namespace okn::ecs {
+
+auto WorldBuilder::build() -> World {
+    return std::move(world_);
+}
+
+} // namespace okn::ecs

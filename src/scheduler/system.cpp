@@ -1,4 +1,4 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#include <okn/ecs/scheduler/system.hpp>
 
-// system.cpp
+namespace okn::ecs {
+} // namespace okn::ecs

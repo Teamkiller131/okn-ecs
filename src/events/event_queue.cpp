@@ -1,4 +1,1 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
-
-// event_queue.cpp
+﻿#include <okn/ecs/events/event_queue.hpp>

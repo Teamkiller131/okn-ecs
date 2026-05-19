@@ -1,9 +1,26 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_WORLD_BUILDER_HPP
-#define OKN_ECS_WORLD_BUILDER_HPP
+#include <okn/ecs/world.hpp>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_WORLD_BUILDER_HPP
+class WorldBuilder {
+public:
+    WorldBuilder() = default;
+
+    template <class T>
+    auto register_component() -> WorldBuilder&;
+
+    auto build() -> World;
+
+private:
+    World world_;
+};
+
+template <class T>
+inline auto WorldBuilder::register_component() -> WorldBuilder& {
+    world_.ensure_store<T>();
+    return *this;
+}
+
+} // namespace okn::ecs

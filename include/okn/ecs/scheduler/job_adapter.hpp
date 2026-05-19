@@ -1,9 +1,16 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_JOB_ADAPTER_HPP
-#define OKN_ECS_JOB_ADAPTER_HPP
+#include <okn/ecs/ecs_types.hpp>
+#include <functional>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_JOB_ADAPTER_HPP
+class IJobSystem {
+public:
+    virtual ~IJobSystem() = default;
+
+    virtual void submit(std::function<void()> job) = 0;
+    virtual void wait_all() = 0;
+};
+
+} // namespace okn::ecs

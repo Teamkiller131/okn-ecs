@@ -1,9 +1,29 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_FILTER_HPP
-#define OKN_ECS_FILTER_HPP
+#include <okn/ecs/ecs_types.hpp>
+#include <vector>
+#include <algorithm>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_FILTER_HPP
+struct Filter {
+    std::vector<ComponentTypeId> with;
+    std::vector<ComponentTypeId> without;
+    std::vector<ComponentTypeId> optional;
+
+    auto matches(const std::vector<ComponentTypeId>& component_types) const -> bool {
+        for (auto cid : with) {
+            if (std::find(component_types.begin(), component_types.end(), cid) == component_types.end()) {
+                return false;
+            }
+        }
+        for (auto cid : without) {
+            if (std::find(component_types.begin(), component_types.end(), cid) != component_types.end()) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+} // namespace okn::ecs

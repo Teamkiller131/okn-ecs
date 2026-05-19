@@ -1,9 +1,19 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_ECS_TYPES_HPP
-#define OKN_ECS_ECS_TYPES_HPP
+#include <okn/core/api/types.hpp>
+#include <okn/core/api/id.hpp>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_ECS_TYPES_HPP
+using okn::core::u8;
+using okn::core::u32;
+using okn::core::u64;
+using okn::core::usize;
+
+using Entity = okn::core::Id;
+
+using ComponentTypeId = u64;
+
+inline constexpr Entity kInvalidEntity{};
+
+} // namespace okn::ecs

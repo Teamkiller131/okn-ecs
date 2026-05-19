@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(MSVC)
+    add_compile_options(/FS)
+endif()
+
 option(BUILD_SAMPLES "Build samples" ON)
 option(BUILD_TESTS   "Build tests"   ON)
 
@@ -25,6 +29,7 @@ file(GLOB_RECURSE ${PROJECT_NAME}_SRC
 
 add_library(${PROJECT_NAME} STATIC ${${PROJECT_NAME}_SRC})
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(${PROJECT_NAME} PUBLIC okn-core-interfaces)
 
 # Compile definitions
 if(OKN_ECS_ENABLE_SPARSE)

@@ -1,9 +1,12 @@
-﻿// Created by Teamkiller on 2025/12/23.
-//
+﻿#pragma once
 
-#ifndef OKN_ECS_ENTITY_HPP
-#define OKN_ECS_ENTITY_HPP
+#include <okn/ecs/ecs_types.hpp>
 
-#pragma once
+namespace okn::ecs {
 
-#endif //OKN_ECS_ENTITY_HPP
+inline auto entity_index(Entity e) noexcept -> u32 { return e.index(); }
+inline auto entity_generation(Entity e) noexcept -> u32 { return e.generation(); }
+inline auto entity_is_valid(Entity e) noexcept -> bool { return e.is_valid(); }
+inline auto make_entity(u32 index, u32 generation = 0) noexcept -> Entity { return Entity(index, generation); }
+
+} // namespace okn::ecs
