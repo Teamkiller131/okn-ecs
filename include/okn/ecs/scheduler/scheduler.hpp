@@ -26,6 +26,8 @@ private:
     IJobSystem* job_system_ = nullptr;
 
     void rebuild_order();
+    void run_sequential(World& world, float delta_time);
+    void run_parallel(World& world, float delta_time);
 };
 
 } // namespace okn::ecs
