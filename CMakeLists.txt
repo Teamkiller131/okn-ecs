@@ -9,7 +9,7 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 
-option(BUILD_SAMPLES "Build samples" OFF)
+set(BUILD_SAMPLES ON)
 option(BUILD_TESTS   "Build tests"   ON)
 
 # Feature toggles
