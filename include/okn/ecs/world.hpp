@@ -14,10 +14,14 @@ template <class... Components>
 class View;
 
 class Query;
+class Serializer;
+class Deserializer;
 
 class World {
     friend class Query;
     friend class WorldBuilder;
+    friend class Serializer;     // walks stores_ to snapshot component bytes
+    friend class Deserializer;   // recreates entities + re-attaches component bytes
 
 public:
     World();
