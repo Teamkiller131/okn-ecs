@@ -2,7 +2,10 @@
 #include <okn/ecs/scheduler/scheduler.hpp>
 #include <okn/ecs/scheduler/system_graph.hpp>
 #include <okn/ecs/scheduler/job_adapter.hpp>
+#include <okn/ecs/scheduler/thread_pool_job_system.hpp>
 #include <okn/ecs/world.hpp>
+
+#include <atomic>
 
 namespace okn::ecs {
 namespace {
@@ -55,6 +58,38 @@ public:
         }
     }
     int exec_count = 0;
+};
+
+// Two systems with DISJOINT writes and no shared reads: the SystemGraph places
+// them in the same parallel level, so the Scheduler dispatches them concurrently
+// through the job system.
+struct CompA { int v = 0; };
+struct CompB { int v = 0; };
+
+class SysA : public System {
+public:
+    SysA() { set_name("SysA"); }
+    auto writes() const -> std::vector<ComponentTypeId> override {
+        return {World::component_type_id<CompA>()};
+    }
+    void execute(World& world, float) override {
+        runs.fetch_add(1, std::memory_order_relaxed);
+        for (auto [e, a] : world.query<CompA>()) { (void)e; a->v += 1; }
+    }
+    std::atomic<int> runs{0};
+};
+
+class SysB : public System {
+public:
+    SysB() { set_name("SysB"); }
+    auto writes() const -> std::vector<ComponentTypeId> override {
+        return {World::component_type_id<CompB>()};
+    }
+    void execute(World& world, float) override {
+        runs.fetch_add(1, std::memory_order_relaxed);
+        for (auto [e, b] : world.query<CompB>()) { (void)e; b->v += 1; }
+    }
+    std::atomic<int> runs{0};
 };
 
 } // namespace
@@ -128,4 +163,44 @@ TEST_CASE("Scheduler - job system") {
     scheduler.run(world, 1.0f);
     auto* pos = world.get_component<Position>(e);
     CHECK(pos->x == 1.0f);
+}
+
+TEST_CASE("Scheduler - parallel path runs systems via a real thread pool") {
+    SystemGraph graph;
+    auto a = std::make_unique<SysA>();
+    auto b = std::make_unique<SysB>();
+    auto* pa = a.get();
+    auto* pb = b.get();
+    graph.add_system(std::move(a));
+    graph.add_system(std::move(b));
+
+    Scheduler scheduler(graph);
+    ThreadPoolJobSystem pool(4);
+    scheduler.set_job_system(&pool);  // exercises run_parallel() with real worker threads
+
+    World world;
+    constexpr int kEntities = 1000;
+    std::vector<Entity> ents;
+    ents.reserve(kEntities);
+    for (int i = 0; i < kEntities; ++i) {
+        auto e = world.create_entity();
+        world.add_component(e, CompA{0});
+        world.add_component(e, CompB{0});
+        ents.push_back(e);
+    }
+
+    constexpr int kFrames = 5;
+    for (int f = 0; f < kFrames; ++f) {
+        scheduler.run(world, 1.0f);
+    }
+
+    // Both systems ran every frame, and each (concurrently-dispatched) system
+    // advanced every entity exactly once per frame.
+    CHECK(pa->runs.load() == kFrames);
+    CHECK(pb->runs.load() == kFrames);
+    for (auto e : ents) {
+        CHECK(world.get_component<CompA>(e)->v == kFrames);
+        CHECK(world.get_component<CompB>(e)->v == kFrames);
+    }
+    CHECK(pool.worker_count() >= 1);
 }
