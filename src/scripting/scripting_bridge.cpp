@@ -5,25 +5,33 @@ namespace okn::ecs {
 
 ScriptingBridge::ScriptingBridge(World& world) : world_(&world) {}
 
-void ScriptingBridge::register_all_to_script(void* script_ctx) {
-    (void)script_ctx;
-    auto& reg = ComponentRegistry::instance();
-    auto& comps = reg.all_components();
-    for (auto& [id, info] : comps) {
-        (void)id; (void)info;
-        // TODO: call script_ctx->register_component(info.name, info.size) when lua binding is complete
+auto ScriptingBridge::register_all_to_script(void* script_ctx, RegisterFn fn) const -> usize {
+    if (fn == nullptr) { return 0; }
+    usize n = 0;
+    for (const auto& [name, desc] : descs_) {
+        fn(script_ctx, name.c_str(), desc.id, desc.size);
+        ++n;
     }
+    return n;
+}
+
+auto ScriptingBridge::component_id(const char* name) const -> ComponentTypeId {
+    if (name == nullptr) { return 0; }
+    auto it = descs_.find(name);
+    return it == descs_.end() ? ComponentTypeId{0} : it->second.id;
+}
+
+auto ScriptingBridge::has_component(Entity e, const char* name) const -> bool {
+    if (name == nullptr) { return false; }
+    auto it = descs_.find(name);
+    if (it == descs_.end()) { return false; }
+    return world_->has_component_by_id(e, it->second.id);
 }
 
 auto ScriptingBridge::script_create_entity(World& w) -> Entity { return w.create_entity(); }
 
-void ScriptingBridge::script_destroy_entity(World& w, Entity e) { if(w.entity_alive(e)) w.destroy_entity(e); }
-
-auto ScriptingBridge::script_has_component(World& w, Entity e, const char* type_name) -> bool {
-    auto type_id = okn::core::hash_string_view(type_name);
-    // World template methods require compile-time type; for runtime queries use reflection
-    (void)w; (void)e; (void)type_id;
-    return false;
+void ScriptingBridge::script_destroy_entity(World& w, Entity e) {
+    if (w.entity_alive(e)) { w.destroy_entity(e); }
 }
 
 } // namespace okn::ecs

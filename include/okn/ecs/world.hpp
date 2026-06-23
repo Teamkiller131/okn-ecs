@@ -52,6 +52,11 @@ public:
     template <class T>
     auto has_component(Entity entity) const -> bool;
 
+    // Runtime, type-erased existence check: does `entity` have the component
+    // whose store key is `id` (== component_type_id<T>())? Lets reflection /
+    // scripting query components by a runtime id without the compile-time type.
+    [[nodiscard]] auto has_component_by_id(Entity entity, ComponentTypeId id) const -> bool;
+
     template <class... Components>
     auto query() -> View<Components...>;
 
@@ -163,6 +168,11 @@ inline auto World::has_component(Entity entity) const -> bool {
         return it->second.has(entity);
     }
     return false;
+}
+
+inline auto World::has_component_by_id(Entity entity, ComponentTypeId id) const -> bool {
+    auto it = stores_.find(id);
+    return it != stores_.end() && it->second.has(entity);
 }
 
 template <class... Components>

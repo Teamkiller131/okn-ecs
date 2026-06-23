@@ -1,26 +1,65 @@
 #pragma once
 
 #include <okn/ecs/ecs_types.hpp>
-#include <okn/ecs/reflection/registry.hpp>
+#include <okn/ecs/world.hpp>
+
+#include <string>
+#include <unordered_map>
+#include <utility>
 
 namespace okn::ecs {
 
-class World;
-
+// Runtime ECS surface exposed to a script runtime.
+//
+// Components are registered under a human name keyed to the SAME ComponentTypeId
+// the World uses for its stores (World::component_type_id<T>()), so a name-based
+// query coming from a script resolves to real component storage.
+//
+// NOTE: this deliberately does NOT use the global ComponentRegistry — that one
+// hashes __FUNCSIG__, which does not match the World's typeid-name store keys,
+// so it cannot resolve a name to a live store. The bridge keeps its own
+// consistent map instead.
 class ScriptingBridge {
 public:
-    ScriptingBridge(World& world);
+    struct ComponentDesc {
+        ComponentTypeId id = 0;  // == World::component_type_id<T>()
+        usize size = 0;
+    };
 
-    // Register all components with the script runtime
-    void register_all_to_script(void* script_ctx); // void* = IScriptContext*
+    // Sink the host uses to forward each registered component to its own script
+    // context, so the bridge never has to depend on okn-script.
+    using RegisterFn = void (*)(void* script_ctx, const char* name,
+                                ComponentTypeId id, usize size);
 
-    // Entity API for scripts
+    explicit ScriptingBridge(World& world);
+
+    // Make component T scriptable under `name`, keyed by the World's store id.
+    template <class T>
+    void register_component(std::string name) {
+        descs_.insert_or_assign(std::move(name),
+                                ComponentDesc{World::component_type_id<T>(), sizeof(T)});
+    }
+
+    // Forward every registered component to a script context via `fn`. A null
+    // `fn` is a no-op. Returns the number of components forwarded.
+    auto register_all_to_script(void* script_ctx, RegisterFn fn) const -> usize;
+
+    // Runtime, name-based component query for scripts. False if `name` was never
+    // registered or the entity lacks that component.
+    [[nodiscard]] auto has_component(Entity e, const char* name) const -> bool;
+
+    // Resolve a registered name to its ComponentTypeId (0 if unknown).
+    [[nodiscard]] auto component_id(const char* name) const -> ComponentTypeId;
+
+    [[nodiscard]] auto registered_count() const -> usize { return descs_.size(); }
+
+    // Entity lifetime API for scripts.
     static auto script_create_entity(World& w) -> Entity;
     static void script_destroy_entity(World& w, Entity e);
-    static auto script_has_component(World& w, Entity e, const char* type_name) -> bool;
 
 private:
     World* world_;
+    std::unordered_map<std::string, ComponentDesc> descs_;
 };
 
 } // namespace okn::ecs
