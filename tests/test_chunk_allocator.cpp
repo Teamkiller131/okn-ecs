@@ -57,7 +57,7 @@ TEST_CASE("ChunkAllocator - multiple allocations") {
     allocator.deallocate(c3);
 }
 
-TEST_CASE("ChunkAllocator - reset clears all") {
+TEST_CASE("ChunkAllocator - reset clears all and stays usable") {
     okn::ecs::ChunkAllocator allocator;
     std::vector<okn::ecs::ComponentTypeId> comps = {1};
     okn::ecs::Archetype arch(comps);
@@ -65,13 +65,18 @@ TEST_CASE("ChunkAllocator - reset clears all") {
 
     auto* c1 = allocator.allocate(arch, sizes);
     auto* c2 = allocator.allocate(arch, sizes);
-    allocator.deallocate(c1);
-    allocator.deallocate(c2);
+    REQUIRE(c1 != nullptr);
+    REQUIRE(c2 != nullptr);
 
+    // reset() frees every chunk (live or not), unlike deallocate() which only
+    // returns a chunk to the free list.
     allocator.reset();
 
+    // The allocator is still usable afterward. We deliberately do NOT compare c3
+    // against c1/c2: those were freed by reset(), so the heap is free to hand the
+    // same address back — comparing freed pointers is nondeterministic (this was
+    // a flaky assertion).
     auto* c3 = allocator.allocate(arch, sizes);
-    CHECK(c3 != c1);
-    CHECK(c3 != c2);
+    CHECK(c3 != nullptr);
     allocator.deallocate(c3);
 }
