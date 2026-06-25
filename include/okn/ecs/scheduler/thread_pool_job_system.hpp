@@ -14,9 +14,9 @@ namespace okn::ecs {
 
 // A concrete IJobSystem backed by a fixed pool of worker threads, so the
 // Scheduler's parallel path actually runs systems concurrently. submit() queues
-// a job for the workers; wait_all() blocks until every submitted job has run.
-// (The Scheduler itself barriers per level via its own counter, but wait_all()
-// completes the interface and is used by callers that fan out then join.)
+// a job for the workers; wait_all() blocks (on a condition variable) until every
+// submitted job has run. The Scheduler fans out a level's systems with submit()
+// then joins with wait_all() — no busy-spin.
 class ThreadPoolJobSystem : public IJobSystem {
 public:
     // thread_count == 0 uses hardware_concurrency() (at least 1).

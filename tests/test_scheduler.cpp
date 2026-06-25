@@ -204,3 +204,38 @@ TEST_CASE("Scheduler - parallel path runs systems via a real thread pool") {
     }
     CHECK(pool.worker_count() >= 1);
 }
+
+TEST_CASE("Scheduler - conflict levels are built once and cached across frames") {
+    SystemGraph graph;
+    graph.add_system(std::make_unique<SysA>());
+    graph.add_system(std::make_unique<SysB>());
+
+    Scheduler scheduler(graph);
+    ThreadPoolJobSystem pool(2);
+    scheduler.set_job_system(&pool);
+
+    World world;
+    auto e = world.create_entity();
+    world.add_component(e, CompA{0});
+    world.add_component(e, CompB{0});
+
+    // SysA writes CompA, SysB writes CompB (disjoint, no shared reads) -> one level.
+    constexpr int kFrames = 8;
+    for (int f = 0; f < kFrames; ++f) {
+        scheduler.run(world, 1.0f);
+    }
+    CHECK(scheduler.level_count() == 1);            // the two systems run concurrently
+    CHECK(scheduler.levelization_count() == 1);     // built once, reused all 8 frames
+
+    // Changing the system set invalidates the cache; the next run rebuilds it once.
+    scheduler.invalidate_order();
+    scheduler.run(world, 1.0f);
+    CHECK(scheduler.levelization_count() == 2);
+
+    // ...and then it's stable again across further frames.
+    scheduler.run(world, 1.0f);
+    scheduler.run(world, 1.0f);
+    CHECK(scheduler.levelization_count() == 2);
+
+    CHECK(world.get_component<CompA>(e)->v == kFrames + 3);   // behavior intact
+}

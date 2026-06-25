@@ -2,7 +2,6 @@
 #include <okn/ecs/scheduler/system_graph.hpp>
 #include <okn/ecs/scheduler/job_adapter.hpp>
 #include <okn/ecs/world.hpp>
-#include <atomic>
 
 namespace okn::ecs {
 
@@ -31,12 +30,29 @@ void Scheduler::run_sequential(World& world, float delta_time) {
 }
 
 void Scheduler::run_parallel(World& world, float delta_time) {
-    const auto sys_count = execution_order_.size();
-    if (sys_count == 0) return;
+    // Levels are cached (rebuilt only when the system set changes), so the per-frame
+    // cost here is just dispatch — not the O(n^2) conflict grouping it used to redo
+    // every frame.
+    for (auto& level : levels_) {
+        if (level.size() == 1) {
+            level[0]->execute(world, delta_time);   // no pool overhead for a lone system
+        } else {
+            for (auto* sys : level) {
+                job_system_->submit([sys, &world, delta_time]() {
+                    sys->execute(world, delta_time);
+                });
+            }
+            job_system_->wait_all();   // efficient CV-backed join, not a core-burning spin
+        }
+    }
+}
 
-    // Group systems into levels where no two systems in the same level
-    // have a read/write conflict with each other.
-    std::vector<std::vector<System*>> levels;
+// Group systems into levels where no two systems in the same level have a read/write
+// conflict — the parallelizable schedule. Pure function of the execution order + the
+// conflict graph, so it is computed once per (re)build and reused every frame.
+void Scheduler::rebuild_levels() {
+    levels_.clear();
+    const usize sys_count = execution_order_.size();
     std::vector<bool> scheduled(sys_count, false);
 
     for (usize i = 0; i < sys_count; ++i) {
@@ -61,25 +77,9 @@ void Scheduler::run_parallel(World& world, float delta_time) {
                 scheduled[j] = true;
             }
         }
-        levels.push_back(std::move(level));
+        levels_.push_back(std::move(level));
     }
-
-    for (auto& level : levels) {
-        if (level.size() == 1) {
-            level[0]->execute(world, delta_time);
-        } else {
-            std::atomic<usize> pending{level.size()};
-            for (auto* sys : level) {
-                job_system_->submit([sys, &world, delta_time, &pending]() {
-                    sys->execute(world, delta_time);
-                    pending.fetch_sub(1, std::memory_order_release);
-                });
-            }
-            while (pending.load(std::memory_order_acquire) > 0) {
-                // spin-wait for all jobs in this level to complete
-            }
-        }
-    }
+    ++levelization_count_;
 }
 
 void Scheduler::set_job_system(IJobSystem* job_system) {
@@ -92,6 +92,7 @@ void Scheduler::invalidate_order() {
 
 void Scheduler::rebuild_order() {
     execution_order_ = graph_->build_execution_order();
+    rebuild_levels();
     order_dirty_ = false;
 }
 
