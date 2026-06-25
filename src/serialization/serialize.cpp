@@ -1,10 +1,13 @@
 #include <okn/ecs/serialization/serialize.hpp>
+#include <okn/ecs/serialization/entity_refs.hpp>
 #include <okn/ecs/world.hpp>
 
 #include <algorithm>
 #include <cstring>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace okn::ecs {
 
@@ -15,7 +18,7 @@ namespace okn::ecs {
 //   u32 magic ("EKO1"), u32 version
 //   u32 entity_count
 //   per entity:
-//       u32 index, u32 generation        (informational; load assigns fresh ids)
+//       u32 index, u32 generation        (the saved id; load remaps refs from it)
 //       u32 component_count
 //       per component (sorted by type id for reproducible output):
 //           u64 type_id (the World store key), u32 size, <size> raw bytes
@@ -120,16 +123,26 @@ auto Deserializer::deserialize(const std::vector<u8>& data) -> bool {
         return false;
     }
 
+    // Pass 1: create every entity up front (building saved-id -> new-id remap) and
+    // record each component's byte range. Components are filled in only after the
+    // whole remap is known, so cross-entity references can be patched correctly.
+    std::unordered_map<u64, Entity> remap;
+    struct PendingComp {
+        Entity owner;
+        ComponentTypeId cid;
+        u32 size;
+        const u8* bytes;
+    };
+    std::vector<PendingComp> pending;
+
     for (u32 i = 0; i < entity_count; ++i) {
         u32 saved_index = 0;
         u32 saved_gen = 0;
         if (!get(ptr, end, saved_index) || !get(ptr, end, saved_gen)) {
             return false;
         }
-        (void)saved_index;
-        (void)saved_gen;  // a fresh id is assigned; cross-entity refs are not remapped
-
         const Entity e = w.create_entity();
+        remap[Entity(saved_index, saved_gen).raw()] = e;
 
         u32 comp_count = 0;
         if (!get(ptr, end, comp_count)) {
@@ -144,26 +157,46 @@ auto Deserializer::deserialize(const std::vector<u8>& data) -> bool {
             if (ptr + size > end) {
                 return false;
             }
-
-            // Get-or-create the store for this type id, then copy the bytes in.
-            auto it = w.stores_.find(cid);
-            if (it == w.stores_.end()) {
-                auto [inserted, _] = w.stores_.emplace(cid, World::ComponentStore{});
-                inserted->second.component_size = size;
-                it = inserted;
-            }
-            World::ComponentStore& store = it->second;
-            if (store.component_size != size) {
-                return false;  // type id collision / size mismatch -> corrupt input
-            }
-
-            w.ensure_sparse_capacity(store, e.index());
-            if (store.has(e)) {
-                std::memcpy(store.get(e), ptr, size);
-            } else {
-                store.push(e, ptr);
-            }
+            pending.push_back({e, cid, size, ptr});
             ptr += size;
+        }
+    }
+
+    // Pass 2: materialize each component, remapping any registered Entity-ref field
+    // from its saved id to the freshly-assigned one (unknown targets -> invalid).
+    const auto& ref_reg = detail::entity_ref_registry();
+    for (const auto& pc : pending) {
+        auto it = w.stores_.find(pc.cid);
+        if (it == w.stores_.end()) {
+            auto [inserted, _] = w.stores_.emplace(pc.cid, World::ComponentStore{});
+            inserted->second.component_size = pc.size;
+            it = inserted;
+        }
+        World::ComponentStore& store = it->second;
+        if (store.component_size != pc.size) {
+            return false;  // type id collision / size mismatch -> corrupt input
+        }
+
+        std::vector<u8> bytes(pc.bytes, pc.bytes + pc.size);
+        const auto rit = ref_reg.find(pc.cid);
+        if (rit != ref_reg.end()) {
+            for (const u32 off : rit->second) {
+                if (off + sizeof(u64) > pc.size) {
+                    continue;  // a stale/incorrect offset can't corrupt the blob
+                }
+                u64 saved_raw = 0;
+                std::memcpy(&saved_raw, bytes.data() + off, sizeof(u64));
+                const auto mit = remap.find(saved_raw);
+                const u64 new_raw = (mit != remap.end()) ? mit->second.raw() : Entity{}.raw();
+                std::memcpy(bytes.data() + off, &new_raw, sizeof(u64));
+            }
+        }
+
+        w.ensure_sparse_capacity(store, pc.owner.index());
+        if (store.has(pc.owner)) {
+            std::memcpy(store.get(pc.owner), bytes.data(), pc.size);
+        } else {
+            store.push(pc.owner, bytes.data());
         }
     }
 

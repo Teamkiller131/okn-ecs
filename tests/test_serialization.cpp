@@ -2,7 +2,9 @@
 
 #include <okn/ecs/world.hpp>
 #include <okn/ecs/serialization/serialize.hpp>
+#include <okn/ecs/serialization/entity_refs.hpp>
 
+#include <cstddef>
 #include <vector>
 
 namespace okn::ecs {
@@ -11,6 +13,7 @@ namespace {
 struct Position { float x, y, z; };
 struct Velocity { float dx, dy; };
 struct Health { int hp; };
+struct Link { Entity target; int tag; };   // holds a cross-entity reference
 
 } // namespace
 
@@ -131,6 +134,48 @@ TEST_CASE("okn::ecs::Serializer - destroyed entities are not saved") {
         CHECK(h->hp == 7);
     }
     CHECK(n == 1);
+}
+
+TEST_CASE("okn::ecs::Serializer - remaps entity references across save/load") {
+    register_entity_ref_fields<Link>({static_cast<u32>(offsetof(Link, target))});
+
+    World a;
+    // Churn ids so the saved entities carry generation>1 — a reloaded world always
+    // assigns fresh (index, gen=1) ids, so an UN-remapped ref would keep a stale id
+    // that no longer resolves. This makes the remap observable, not coincidental.
+    Entity f0 = a.create_entity();
+    Entity f1 = a.create_entity();
+    a.destroy_entity(f0);
+    a.destroy_entity(f1);
+    Entity hero = a.create_entity();    // reuses a freed index at generation 2
+    Entity sword = a.create_entity();   // reuses the other freed index at generation 2
+    REQUIRE(hero.generation() >= 2);
+    REQUIRE(sword.generation() >= 2);
+
+    a.add_component<Link>(hero, {sword, 42});   // hero references sword
+    a.add_component<Health>(sword, {7});
+
+    Serializer ser(a);
+    const std::vector<u8> bytes = ser.save();
+
+    World b;
+    Serializer loader(b);
+    REQUIRE(loader.load(bytes));
+    REQUIRE(b.entity_count() == 2);
+
+    // Identify the reloaded entities by which component they carry.
+    Entity loaded_hero{}, loaded_sword{};
+    for (auto [e, l] : b.query<Link>()) { (void)l; loaded_hero = e; }
+    for (auto [e, h] : b.query<Health>()) { (void)h; loaded_sword = e; }
+    REQUIRE(loaded_hero.is_valid());
+    REQUIRE(loaded_sword.is_valid());
+
+    const Link* link = b.get_component<Link>(loaded_hero);
+    REQUIRE(link != nullptr);
+    CHECK(link->tag == 42);
+    // The reference was remapped to the NEW sword id, not the stale saved one.
+    CHECK(link->target == loaded_sword);
+    CHECK(b.entity_alive(link->target));
 }
 
 } // namespace okn::ecs
