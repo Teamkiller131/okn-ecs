@@ -269,3 +269,45 @@ TEST_CASE("View - structured binding with three components") {
         CHECK(health->value == 75);
     }
 }
+
+TEST_CASE("Query - cached-store iteration yields the exact multi-component intersection") {
+    // Exercises the cached-store hot path at scale with a non-trivial intersection:
+    // every 2nd entity gets Velocity, every 3rd gets Health, and the iterated component
+    // pointers must reference THIS entity's data (a mis-cached store would cross wires).
+    World world;
+    constexpr int kN = 600;
+    std::vector<Entity> ents;
+    ents.reserve(kN);
+    int expect_pv = 0, expect_pvh = 0;
+    for (int i = 0; i < kN; ++i) {
+        Entity e = world.create_entity();
+        world.add_component(e, Position{static_cast<float>(i), 0.0f, 0.0f});
+        const bool has_v = (i % 2 == 0);
+        const bool has_h = (i % 3 == 0);
+        if (has_v) { world.add_component(e, Velocity{static_cast<float>(i), 0.0f, 0.0f}); }
+        if (has_h) { world.add_component(e, Health{i}); }
+        if (has_v) { ++expect_pv; }
+        if (has_v && has_h) { ++expect_pvh; }
+        ents.push_back(e);
+    }
+
+    // query<Position, Velocity>: exactly the even-i entities, each pointer self-consistent.
+    int seen_pv = 0;
+    for (auto [e, p, v] : world.query<Position, Velocity>()) {
+        (void)e;
+        ++seen_pv;
+        CHECK(p->x == v->dx);                 // both encode i -> same store cached per type
+        CHECK(static_cast<int>(p->x) % 2 == 0);
+    }
+    CHECK(seen_pv == expect_pv);
+
+    // query<Position, Velocity, Health>: even AND multiple-of-3 (i.e. multiples of 6).
+    int seen_pvh = 0;
+    for (auto [e, p, v, h] : world.query<Position, Velocity, Health>()) {
+        (void)e; (void)v;
+        ++seen_pvh;
+        CHECK(static_cast<int>(p->x) == h->value);   // both encode i for the same entity
+        CHECK(h->value % 6 == 0);
+    }
+    CHECK(seen_pvh == expect_pvh);
+}

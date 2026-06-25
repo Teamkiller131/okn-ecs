@@ -3,6 +3,7 @@
 #include <okn/ecs/ecs_types.hpp>
 #include <okn/ecs/entity.hpp>
 #include <okn/ecs/component.hpp>
+#include <array>
 #include <unordered_map>
 #include <vector>
 #include <cstring>
@@ -22,6 +23,7 @@ class World {
     friend class WorldBuilder;
     friend class Serializer;     // walks stores_ to snapshot component bytes
     friend class Deserializer;   // recreates entities + re-attaches component bytes
+    template <class... Cs> friend class View;   // iterates via cached ComponentStore pointers
 
 public:
     World();
@@ -177,35 +179,37 @@ inline auto World::has_component_by_id(Entity entity, ComponentTypeId id) const 
 
 template <class... Components>
 inline auto World::query() -> View<Components...> {
+    constexpr usize n = sizeof...(Components);
     std::vector<Entity> matched;
+    std::array<ComponentStore*, n> stores{};   // cached once -> the View derefs through these
 
-    if constexpr (sizeof...(Components) > 0) {
-        ComponentTypeId cids[] = {component_type_id<Components>()...};
-        constexpr usize n = sizeof...(Components);
+    if constexpr (n > 0) {
+        const ComponentTypeId cids[] = {component_type_id<Components>()...};
 
+        // Resolve every component's store ONCE (n hash lookups total, not per entity).
+        // If any component type is absent, nothing can match -> empty view.
         const ComponentStore* smallest = nullptr;
-        ComponentTypeId smallest_cid = 0;
-
+        usize smallest_i = 0;
         for (usize i = 0; i < n; ++i) {
             auto it = stores_.find(cids[i]);
             if (it == stores_.end()) {
-                return View<Components...>(*this, std::move(matched));
+                return View<Components...>(std::move(matched), stores);  // empty: stores unused
             }
-            if (!smallest || it->second.count < smallest->count) {
+            stores[i] = &it->second;
+            if (smallest == nullptr || it->second.count < smallest->count) {
                 smallest = &it->second;
-                smallest_cid = cids[i];
+                smallest_i = i;
             }
         }
 
-        for (usize i = 0; i < smallest->count; ++i) {
-            Entity entity = smallest->entities[i];
+        // Walk the smallest store's dense entities; keep those present in every other
+        // store (direct cached lookups, no per-entity hash-map find).
+        for (usize k = 0; k < smallest->count; ++k) {
+            const Entity entity = smallest->entities[k];
             bool has_all = true;
             for (usize j = 0; j < n && has_all; ++j) {
-                if (cids[j] == smallest_cid) continue;
-                auto it = stores_.find(cids[j]);
-                if (it == stores_.end() || !it->second.has(entity)) {
-                    has_all = false;
-                }
+                if (j == smallest_i) { continue; }
+                if (!stores[j]->has(entity)) { has_all = false; }
             }
             if (has_all) {
                 matched.push_back(entity);
@@ -213,7 +217,7 @@ inline auto World::query() -> View<Components...> {
         }
     }
 
-    return View<Components...>(*this, std::move(matched));
+    return View<Components...>(std::move(matched), stores);
 }
 
 } // namespace okn::ecs
