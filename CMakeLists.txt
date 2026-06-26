@@ -29,7 +29,7 @@ file(GLOB_RECURSE ${PROJECT_NAME}_SRC
 
 add_library(${PROJECT_NAME} STATIC ${${PROJECT_NAME}_SRC})
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(${PROJECT_NAME} PUBLIC okn-core-interfaces)
+target_link_libraries(${PROJECT_NAME} PUBLIC okn-core-interfaces okn-platform)  # scheduler runs on okn-platform's work-stealing pool
 
 # Compile definitions
 if(OKN_ECS_ENABLE_SPARSE)

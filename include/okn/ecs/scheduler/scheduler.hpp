@@ -4,6 +4,10 @@
 #include <okn/ecs/scheduler/system.hpp>
 #include <vector>
 
+// The job system is okn-platform's single IJobSystem (work-stealing pool); the ECS
+// scheduler no longer ships its own duplicate interface/pool.
+namespace okn::platform { class IJobSystem; }
+
 namespace okn::ecs {
 
 class SystemGraph;
@@ -15,7 +19,13 @@ public:
 
     void run(World& world, float delta_time);
 
-    void set_job_system(class IJobSystem* job_system);
+    // Set the work-stealing pool the parallel path runs on (null => sequential).
+    // INVARIANT: the scheduler joins each parallel level by draining the pool to
+    // quiescence (wait_all), so it requires EXCLUSIVE use of this pool while run() is
+    // executing. Don't submit to the same pool from another producer concurrently, or
+    // the per-level barrier will over-synchronize and race the job accounting — give
+    // the scheduler its own pool instance.
+    void set_job_system(okn::platform::IJobSystem* job_system);
 
     void invalidate_order();
 
@@ -32,7 +42,7 @@ private:
     std::vector<std::vector<System*>> levels_;   // cached conflict-free parallel levels
     usize levelization_count_ = 0;
     bool order_dirty_ = true;
-    IJobSystem* job_system_ = nullptr;
+    okn::platform::IJobSystem* job_system_ = nullptr;
 
     void rebuild_order();
     void rebuild_levels();

@@ -1,6 +1,6 @@
 ﻿#include <okn/ecs/scheduler/scheduler.hpp>
 #include <okn/ecs/scheduler/system_graph.hpp>
-#include <okn/ecs/scheduler/job_adapter.hpp>
+#include <okn/platform/thread/thread_pool.hpp>   // okn::platform::IJobSystem (submit/wait_all)
 #include <okn/ecs/world.hpp>
 
 namespace okn::ecs {
@@ -42,7 +42,9 @@ void Scheduler::run_parallel(World& world, float delta_time) {
                     sys->execute(world, delta_time);
                 });
             }
-            job_system_->wait_all();   // efficient CV-backed join, not a core-burning spin
+            job_system_->wait_all();   // CV-backed join (not a spin); drains the pool to
+                                       // quiescence -> the scheduler must own this pool
+                                       // exclusively while run() executes (see set_job_system)
         }
     }
 }
@@ -82,7 +84,7 @@ void Scheduler::rebuild_levels() {
     ++levelization_count_;
 }
 
-void Scheduler::set_job_system(IJobSystem* job_system) {
+void Scheduler::set_job_system(okn::platform::IJobSystem* job_system) {
     job_system_ = job_system;
 }
 

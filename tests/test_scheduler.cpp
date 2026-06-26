@@ -1,8 +1,7 @@
 ﻿#include <doctest/doctest.h>
 #include <okn/ecs/scheduler/scheduler.hpp>
 #include <okn/ecs/scheduler/system_graph.hpp>
-#include <okn/ecs/scheduler/job_adapter.hpp>
-#include <okn/ecs/scheduler/thread_pool_job_system.hpp>
+#include <okn/platform/thread/thread_pool.hpp>   // unified job system: WorkStealingThreadPool
 #include <okn/ecs/world.hpp>
 
 #include <atomic>
@@ -149,7 +148,7 @@ TEST_CASE("Scheduler - empty graph") {
 }
 
 TEST_CASE("Scheduler - job system") {
-    IJobSystem* js = nullptr;
+    okn::platform::IJobSystem* js = nullptr;
     SystemGraph graph;
     graph.add_system(std::make_unique<MoveSystem>());
     Scheduler scheduler(graph);
@@ -175,7 +174,7 @@ TEST_CASE("Scheduler - parallel path runs systems via a real thread pool") {
     graph.add_system(std::move(b));
 
     Scheduler scheduler(graph);
-    ThreadPoolJobSystem pool(4);
+    okn::platform::WorkStealingThreadPool pool(4);
     scheduler.set_job_system(&pool);  // exercises run_parallel() with real worker threads
 
     World world;
@@ -211,7 +210,7 @@ TEST_CASE("Scheduler - conflict levels are built once and cached across frames")
     graph.add_system(std::make_unique<SysB>());
 
     Scheduler scheduler(graph);
-    ThreadPoolJobSystem pool(2);
+    okn::platform::WorkStealingThreadPool pool(2);
     scheduler.set_job_system(&pool);
 
     World world;

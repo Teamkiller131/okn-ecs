@@ -28,7 +28,7 @@ include/okn/ecs/
   sparse/    sparse_set.hpp sparse_storage.hpp
   storage/   storage.hpp storage_registry.hpp
   query/     query.hpp filter.hpp relation.hpp view.hpp
-  scheduler/ system.hpp system_graph.hpp scheduler.hpp job_adapter.hpp
+  scheduler/ system.hpp system_graph.hpp scheduler.hpp   (job system: okn-platform's WorkStealingThreadPool)
   hierarchy/ transform.hpp hierarchy.hpp
   events/    event_bus.hpp event_queue.hpp
   snapshot/  snapshot.hpp rollback.hpp
