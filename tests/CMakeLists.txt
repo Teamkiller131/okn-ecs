@@ -4,7 +4,7 @@ set(TESTS_TARGET okn-ecs_tests)
 
 find_package(doctest CONFIG QUIET)
 if(NOT doctest_FOUND)
-    set(doctest_DIR "D:/vcpkg/installed/x64-windows/share/doctest")
+    set(doctest_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows/share/doctest")
     find_package(doctest CONFIG QUIET)
 endif()
 
