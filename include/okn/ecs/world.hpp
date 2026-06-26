@@ -59,6 +59,17 @@ public:
     // scripting query components by a runtime id without the compile-time type.
     [[nodiscard]] auto has_component_by_id(Entity entity, ComponentTypeId id) const -> bool;
 
+    // ── Type-erased component access (for reflection / scripting) ──
+    // Read/write a component's raw bytes by store id; null if the entity lacks it.
+    // The caller knows the layout (it registered the id↔size) and casts accordingly.
+    [[nodiscard]] auto component_data_by_id(Entity entity, ComponentTypeId id) -> void*;
+    [[nodiscard]] auto component_data_by_id(Entity entity, ComponentTypeId id) const -> const void*;
+    // Attach a zero-initialized component of `size` bytes under `id` (get-or-create the
+    // store). Returns its data (null on a size mismatch with an existing store).
+    auto add_component_by_id(Entity entity, ComponentTypeId id, usize size) -> void*;
+    // Every live entity that currently has the component `id` (dense store order).
+    [[nodiscard]] auto entities_with(ComponentTypeId id) const -> std::vector<Entity>;
+
     template <class... Components>
     auto query() -> View<Components...>;
 

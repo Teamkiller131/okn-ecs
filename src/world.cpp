@@ -122,4 +122,45 @@ auto World::ComponentStore::has(Entity entity) const -> bool {
     return slot < static_cast<u32>(count) && entities[slot] == entity;
 }
 
+// ── Type-erased component access (reflection / scripting) ──
+
+auto World::component_data_by_id(Entity entity, ComponentTypeId id) -> void* {
+    auto it = stores_.find(id);
+    return (it == stores_.end()) ? nullptr : it->second.get(entity);
+}
+
+auto World::component_data_by_id(Entity entity, ComponentTypeId id) const -> const void* {
+    auto it = stores_.find(id);
+    return (it == stores_.end()) ? nullptr : it->second.get(entity);
+}
+
+auto World::add_component_by_id(Entity entity, ComponentTypeId id, usize size) -> void* {
+    auto it = stores_.find(id);
+    if (it == stores_.end()) {
+        auto [inserted, ok] = stores_.emplace(id, ComponentStore{});
+        (void)ok;
+        inserted->second.component_size = size;
+        it = inserted;
+    }
+    ComponentStore& store = it->second;
+    if (store.component_size != size) { return nullptr; }   // id collision / wrong size
+    ensure_sparse_capacity(store, entity.index());
+    if (!store.has(entity)) {
+        const std::vector<u8> zero(size, 0u);
+        store.push(entity, zero.data());
+    }
+    return store.get(entity);
+}
+
+auto World::entities_with(ComponentTypeId id) const -> std::vector<Entity> {
+    std::vector<Entity> out;
+    auto it = stores_.find(id);
+    if (it != stores_.end()) {
+        const ComponentStore& s = it->second;
+        out.reserve(s.count);
+        for (usize i = 0; i < s.count; ++i) { out.push_back(s.entities[i]); }
+    }
+    return out;
+}
+
 } // namespace okn::ecs

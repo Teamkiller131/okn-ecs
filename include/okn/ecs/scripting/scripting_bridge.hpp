@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace okn::ecs {
 
@@ -47,6 +48,18 @@ public:
     // Runtime, name-based component query for scripts. False if `name` was never
     // registered or the entity lacks that component.
     [[nodiscard]] auto has_component(Entity e, const char* name) const -> bool;
+
+    // Read/write a registered component's raw bytes by name (null if `name` is unknown
+    // or the entity lacks it). The script knows the layout from registration and casts.
+    [[nodiscard]] auto component_data(Entity e, const char* name) -> void*;
+    [[nodiscard]] auto component_data(Entity e, const char* name) const -> const void*;
+
+    // Attach a zero-initialized instance of the named component to `e`; returns its
+    // data (null if `name` was never registered). Existing data is left untouched.
+    auto add_component(Entity e, const char* name) -> void*;
+
+    // Every live entity that currently has the named component (empty if unknown).
+    [[nodiscard]] auto query(const char* name) const -> std::vector<Entity>;
 
     // Resolve a registered name to its ComponentTypeId (0 if unknown).
     [[nodiscard]] auto component_id(const char* name) const -> ComponentTypeId;
