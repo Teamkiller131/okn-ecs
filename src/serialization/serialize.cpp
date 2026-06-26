@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -100,6 +102,25 @@ auto Serializer::save() -> std::vector<u8> {
 auto Serializer::load(const std::vector<u8>& data) -> bool {
     Deserializer d(*world_);
     return d.deserialize(data);
+}
+
+auto Serializer::save_to_file(const std::string& path) -> bool {
+    const std::vector<u8> bytes = save();
+    std::ofstream f(path, std::ios::binary);
+    if (!f) { return false; }
+    if (!bytes.empty()) {
+        f.write(reinterpret_cast<const char*>(bytes.data()),
+                static_cast<std::streamsize>(bytes.size()));
+    }
+    return static_cast<bool>(f);
+}
+
+auto Serializer::load_from_file(const std::string& path) -> bool {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) { return false; }
+    const std::vector<u8> bytes((std::istreambuf_iterator<char>(f)),
+                                std::istreambuf_iterator<char>());
+    return load(bytes);
 }
 
 Deserializer::Deserializer(World& world) : world_(&world) {}

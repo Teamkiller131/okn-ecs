@@ -5,6 +5,7 @@
 #include <okn/ecs/serialization/entity_refs.hpp>
 
 #include <cstddef>
+#include <cstdio>
 #include <vector>
 
 namespace okn::ecs {
@@ -176,6 +177,53 @@ TEST_CASE("okn::ecs::Serializer - remaps entity references across save/load") {
     // The reference was remapped to the NEW sword id, not the stale saved one.
     CHECK(link->target == loaded_sword);
     CHECK(b.entity_alive(link->target));
+}
+
+TEST_CASE("okn::ecs::Serializer - save_to_file/load_from_file survives a restart with refs") {
+    register_entity_ref_fields<Link>({static_cast<u32>(offsetof(Link, target))});
+    const char* path = "okn_ecs_scene_roundtrip.eko";
+    std::remove(path);
+
+    // "Save the scene": churn ids to gen>1, link hero->sword, write to disk.
+    {
+        World a;
+        Entity f0 = a.create_entity();
+        Entity f1 = a.create_entity();
+        a.destroy_entity(f0);
+        a.destroy_entity(f1);
+        Entity hero = a.create_entity();
+        Entity sword = a.create_entity();
+        a.add_component<Link>(hero, {sword, 7});
+        a.add_component<Health>(sword, {33});
+        Serializer ser(a);
+        REQUIRE(ser.save_to_file(path));
+    }
+
+    // "Restart": a brand-new World loads the file from scratch.
+    World b;
+    Serializer loader(b);
+    REQUIRE(loader.load_from_file(path));
+    REQUIRE(b.entity_count() == 2);
+
+    Entity loaded_hero{}, loaded_sword{};
+    for (auto [e, l] : b.query<Link>()) { (void)l; loaded_hero = e; }
+    for (auto [e, h] : b.query<Health>()) { (void)h; loaded_sword = e; }
+    REQUIRE(loaded_hero.is_valid());
+    REQUIRE(loaded_sword.is_valid());
+
+    const Link* link = b.get_component<Link>(loaded_hero);
+    REQUIRE(link != nullptr);
+    CHECK(link->tag == 7);
+    CHECK(link->target == loaded_sword);   // ref survived the disk round-trip, remapped
+    CHECK(b.entity_alive(link->target));
+
+    // A missing file fails gracefully (no throw, no partial load).
+    World c;
+    Serializer cl(c);
+    CHECK_FALSE(cl.load_from_file("okn_ecs_no_such_scene.eko"));
+    CHECK(c.entity_count() == 0);
+
+    std::remove(path);
 }
 
 } // namespace okn::ecs
