@@ -36,4 +36,13 @@ private:
     World* world_;
 };
 
+// The determinism oracle: FNV-1a over the Serializer's byte image, which is
+// reproducible by construction (live entities walked in index order, per-entity
+// components sorted by type id, raw POD bytes). Two Worlds with identical
+// registered-component state hash equal; any component/entity change moves the
+// hash. Same-build only (the image is host-endian) — an intra-build regression
+// tripwire for save/load, scheduler, physics, and future netcode, not a
+// cross-platform digest.
+auto state_hash(World& world) -> u64;
+
 } // namespace okn::ecs

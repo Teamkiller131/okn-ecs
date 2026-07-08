@@ -1,11 +1,13 @@
 #include <okn/ecs/serialization/serialize.hpp>
 #include <okn/ecs/serialization/entity_refs.hpp>
 #include <okn/ecs/world.hpp>
+#include <okn/core/api/hash.hpp>
 
 #include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <span>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -222,6 +224,11 @@ auto Deserializer::deserialize(const std::vector<u8>& data) -> bool {
     }
 
     return true;
+}
+
+auto state_hash(World& world) -> u64 {
+    const std::vector<u8> image = Serializer(world).save();
+    return okn::core::hash_bytes(std::as_bytes(std::span(image)));
 }
 
 } // namespace okn::ecs

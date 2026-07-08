@@ -226,4 +226,38 @@ TEST_CASE("okn::ecs::Serializer - save_to_file/load_from_file survives a restart
     std::remove(path);
 }
 
+TEST_CASE("okn::ecs::state_hash - the determinism oracle") {
+    // Two Worlds built identically hash equal; a save/load round-trip preserves the
+    // hash; any component mutation moves it. This is the intra-build tripwire the
+    // scheduler/physics/netcode regression tests key on.
+    auto build = [](World& w) {
+        Entity e1 = w.create_entity();
+        w.add_component<Position>(e1, {1.0f, 2.0f, 3.0f});
+        w.add_component<Velocity>(e1, {4.0f, 5.0f});
+        Entity e2 = w.create_entity();
+        w.add_component<Health>(e2, {100});
+        return e2;
+    };
+
+    World a;
+    World b;
+    build(a);
+    const Entity b_e2 = build(b);
+    const u64 ha = state_hash(a);
+    CHECK_EQ(ha, state_hash(b));                      // identical state → identical hash
+    CHECK_EQ(ha, state_hash(a));                      // hashing is repeatable + side-effect-free
+
+    World c;
+    Serializer(c).load(Serializer(a).save());
+    CHECK_EQ(ha, state_hash(c));                      // survives a save/load round-trip
+
+    b.get_component<Health>(b_e2)->hp = 99;           // one field, one point
+    CHECK_NE(ha, state_hash(b));                      // any mutation moves the hash
+
+    World d;
+    build(d);
+    d.create_entity();                                // an extra (component-less) entity
+    CHECK_NE(ha, state_hash(d));
+}
+
 } // namespace okn::ecs
