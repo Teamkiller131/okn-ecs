@@ -66,6 +66,12 @@ public:
 
     [[nodiscard]] auto registered_count() const -> usize { return descs_.size(); }
 
+    // The registered name -> descriptor map, for generic consumers that enumerate the
+    // scriptable surface (the editor's generic inspector, tooling): iterate, then use
+    // has_component/component_data per name.
+    [[nodiscard]] auto descriptors() const
+        -> const std::unordered_map<std::string, ComponentDesc>& { return descs_; }
+
     // Entity lifetime API for scripts.
     static auto script_create_entity(World& w) -> Entity;
     static void script_destroy_entity(World& w, Entity e);
