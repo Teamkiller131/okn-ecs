@@ -50,6 +50,29 @@ auto ScriptingBridge::query(const char* name) const -> std::vector<Entity> {
     return (id == 0) ? std::vector<Entity>{} : world_->entities_with(id);
 }
 
+auto ScriptingBridge::fields(const char* comp) const -> const std::vector<FieldDesc>* {
+    if (comp == nullptr) { return nullptr; }
+    const auto it = descs_.find(comp);
+    return it == descs_.end() ? nullptr : &it->second.fields;
+}
+
+auto ScriptingBridge::find_field(const char* comp, const char* field) const -> const FieldDesc* {
+    if (field == nullptr) { return nullptr; }
+    const auto* fs = fields(comp);
+    if (fs == nullptr) { return nullptr; }
+    for (const FieldDesc& f : *fs) {
+        if (f.name == field) { return &f; }
+    }
+    return nullptr;
+}
+
+auto ScriptingBridge::field_data(Entity e, const char* comp, const char* field) -> void* {
+    const FieldDesc* fd = find_field(comp, field);
+    if (fd == nullptr) { return nullptr; }
+    void* base = component_data(e, comp);
+    return base == nullptr ? nullptr : static_cast<u8*>(base) + fd->offset;
+}
+
 auto ScriptingBridge::script_create_entity(World& w) -> Entity { return w.create_entity(); }
 
 void ScriptingBridge::script_destroy_entity(World& w, Entity e) {

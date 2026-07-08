@@ -22,9 +22,21 @@ namespace okn::ecs {
 // consistent map instead.
 class ScriptingBridge {
 public:
+    // Optional per-field reflection: {name, byte offset, scalar type}. Registered
+    // alongside a component, it lets ONE descriptor power a labeled inspector, a
+    // generic script get_field/set_field, and any other by-name field consumer.
+    // Components registered without fields stay opaque blobs (still fully usable
+    // through component_data) — the layer is opt-in, POD-only, scalar fields only.
+    struct FieldDesc {
+        std::string name;
+        u32 offset = 0;
+        enum class Type : u32 { kF32 = 0, kF64, kI32, kU32, kU8, kBool } type = Type::kF32;
+    };
+
     struct ComponentDesc {
         ComponentTypeId id = 0;  // == World::component_type_id<T>()
         usize size = 0;
+        std::vector<FieldDesc> fields;   // empty = opaque (no field reflection)
     };
 
     // Sink the host uses to forward each registered component to its own script
@@ -35,10 +47,12 @@ public:
     explicit ScriptingBridge(World& world);
 
     // Make component T scriptable under `name`, keyed by the World's store id.
+    // Pass field descriptors to opt into per-field reflection.
     template <class T>
-    void register_component(std::string name) {
-        descs_.insert_or_assign(std::move(name),
-                                ComponentDesc{World::component_type_id<T>(), sizeof(T)});
+    void register_component(std::string name, std::vector<FieldDesc> fields = {}) {
+        descs_.insert_or_assign(
+            std::move(name),
+            ComponentDesc{World::component_type_id<T>(), sizeof(T), std::move(fields)});
     }
 
     // Forward every registered component to a script context via `fn`. A null
@@ -71,6 +85,15 @@ public:
     // has_component/component_data per name.
     [[nodiscard]] auto descriptors() const
         -> const std::unordered_map<std::string, ComponentDesc>& { return descs_; }
+
+    // ── Per-field reflection (only for components registered WITH FieldDescs) ──
+    // The component's field list (null if the component is unknown; may be empty).
+    [[nodiscard]] auto fields(const char* comp) const -> const std::vector<FieldDesc>*;
+    // One field's descriptor (null if the component or field is unknown).
+    [[nodiscard]] auto find_field(const char* comp, const char* field) const -> const FieldDesc*;
+    // A pointer to the field's bytes inside the live component (null if the
+    // component/field is unknown or the entity lacks the component).
+    [[nodiscard]] auto field_data(Entity e, const char* comp, const char* field) -> void*;
 
     // Entity lifetime API for scripts.
     static auto script_create_entity(World& w) -> Entity;
